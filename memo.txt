@@ -1,0 +1,13 @@
+const getStockSector = async ticker => {
+
+  try {
+    const queryOptions = { modules: ["summaryProfile"] };
+    const result = await yahooFinance.quoteSummary(ticker,queryOptions);
+    const sector = result.summaryProfile.sector;
+    console.log(`${ticker}のセクター：${sector}`);
+    return sector;
+  } catch(error) {
+    console.log("エラー：", error);
+  }
+};
+

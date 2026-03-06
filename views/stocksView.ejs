@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Entry Judgement</title>
+  <meta name="description" content="Rule: Close >= 5 days line & 5 days line > 25 days line">
+  <link rel="stylesheet" type="text/css" href="/css/stocks.css">
+  <link rel="stylesheet" type="text/css" href="/css/common.css">
+  <!-- ファビコンの設置例 -->
+  <!-- <link rel="icon" href="favicon.ico"> -->
+</head>
+<body>
+  <h1><%= title %></h1>
+  <h5>Logic&nbsp;:&nbsp;5-day moving average => price & 5-day moving average > 25-day moving average then entry judgement is TRUE</h5>
+  <% stocks.forEach(stock => { %>
+    <div class="stock">
+      <div class="stock-title">
+        <div>
+          <%= stock.ticker %>&nbsp;&nbsp;<%= stock.name %>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<%= stock.sector %>
+        </div>
+        <div class="stock-time">
+          <%= stock.time %>
+        </div>
+      </div>
+      <div class="stock-info">
+
+        <div class="stock-info-div">
+          <span class="info-title">Open</span>
+          <span class="stock-value"><%= stock.open.toLocaleString() %></span>
+        </div>
+
+        <div class="stock-info-div">
+          <span class="info-title">High</span>
+          <span class="stock-value"><%= stock.high.toLocaleString() %></span>
+        </div>
+
+        <div class="stock-info-div">
+          <span class="info-title">Low</span>
+          <span class="stock-value"><%= stock.low.toLocaleString() %></span>
+        </div>
+
+        <div class="stock-info-div">
+          <span class="info-title">Price</span>
+          <span class="stock-value"><%= stock.price.toLocaleString() %></span>
+        </div>
+
+        <div class="stock-info-div">
+          <span class="info-title">Volume</span>
+          <span class="stock-value"><%= stock.volume.toLocaleString() %></span>
+        </div>
+
+        <div class="stock-info-div <%= stock.entryJudgement ? 'true' : 'false' %>">
+          <span class="info-title">Entry</span>
+          <span class="stock-value"><%= stock.entryJudgement %></span>
+        </div>
+
+      </div>
+    </div>
+  <% }); %>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "Nikkei225-entry-judgement",
+  "version": "1.0.0",
+  "description": "check stock price",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "author": "Alexandre PA",
+  "license": "MIT",
+  "dependencies": {
+    "ejs": "^4.0.1",
+    "express": "^5.2.1",
+    "yahoo-finance2": "^3.13.1"
+  }
+}
