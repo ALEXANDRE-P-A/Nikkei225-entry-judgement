@@ -1,8 +1,15 @@
 const YahooFinance  = require('yahoo-finance2').default;
 const express = require('express');
-const app = express();
+const cors = require('cors');
 const path = require('path');
+const cron = require('node-cron');
 const PORT = 3000;
+
+const app = express();
+
+let nikkei225MarketTime = null;
+let nikkei225Stocks = [];
+let loadingFlag = false;
 
 const stockSymbols = {
   fharmaceutical: [ 4151, 4502, 4503, 4506, 4507, 4519, 4523, 4568, 4578 ], // 医薬品
@@ -41,6 +48,7 @@ const stockSymbols = {
   landTransportation: [ 9064, 9147 ], // 陸運
 }
 
+app.use(cors()); // Enables CORS for all routes and origins
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.set('view engine', 'ejs'); // EJSを使用設定
@@ -97,13 +105,13 @@ const getHistoricalData = async ticker => {
     const results = await yahooFinance.historical(ticker, queryOptions);
 
     const lastCloseValue = results[results.length-1].close;
-    const dayLine5Value = results.slice(-5).reduce((accumulator, currentValue) => accumulator + currentValue.close, 0);
-    const dayLine25Value = results.slice(-25).reduce((accumulator, currentValue) => accumulator + currentValue.close, 0);
+    const MA1 = results.slice(-5).reduce((accumulator, currentValue) => accumulator + currentValue.close, 0);
+    const MA2 = results.slice(-25).reduce((accumulator, currentValue) => accumulator + currentValue.close, 0);
 
     // エントリー条件１：５日線が２５日線よりも上（２５日線を含まない)
-    const entryCondition1 = dayLine5Value / 5 > dayLine25Value / 25;
+    const entryCondition1 = MA1 / 5 > MA2 / 25;
     // エントリー条件２：株価の終値が５日線以上（５日線を含む）
-    const entryCondition2 = lastCloseValue >= dayLine5Value / 5;
+    const entryCondition2 = lastCloseValue >= MA1 / 5;
 
     // エントリー判断
     const entryJudgement = (entryCondition1 === true) && (entryCondition2 === true);
@@ -114,6 +122,17 @@ const getHistoricalData = async ticker => {
     console.error(e);
   }
 }
+
+const getHistoricalStockDataToServer = async tickers => {
+
+  const queryOptions = {
+    period1: getPeriodDate(60), // 開始日 (YYYY-MM-DD または UNIX時間)
+    period2: getPeriodDate(0), // 終了日 (必須)
+    interval: '1d'// データ間隔 ('1d' = 日次'1wk' = 週次'1mo' = 月次)
+  };
+
+
+};
 
 const getStocksData = async array => {
 
@@ -154,7 +173,7 @@ const getStocksToEntryData = async array => {
 
     if(entryJudgement){
       const stockInfo = await getStockInfo(`${ticker}.T`);
-      const time = stockInfo.regularMarketTime;
+      const time = Math.floor(new Date().getTime() / 1000);
       const name = stockInfo.longName || stockInfo.shortName; 
       const sector = await getStockSector(`${ticker}.T`);
       const open = stockInfo.regularMarketOpen;
@@ -180,6 +199,27 @@ const getStocksToEntryData = async array => {
   }
   return stocksDataArray;
 };
+
+const getMarketUpdateTime = async _ => {
+  try {
+    const query = "^N225"; // 日経平均のデータを取得
+    const result = await yahooFinance.quote(query);
+
+    if(result && result.regularMarketTime)
+      return result.regularMarketTime.toLocaleString("en-US", { hour12: false});
+    else
+      return "Error"
+
+  } catch (error) {
+    console.error('エラー:', error);
+  }
+};
+
+app.get('/marketTime', async (req, res) => {
+  const marketTime = await getMarketUpdateTime();
+  console.log(marketTime);
+  res.json({ "updateTime" : `${marketTime}`});
+});
 
 app.get('/', async (req, res) => {
   res.render('index');
@@ -359,6 +399,80 @@ app.get('/landTransportation', async (req, res) => {
   const stocks = await getStocksData(stockSymbols.landTransportation);
   res.render('stocksView', { title: "Land Transportation", stocks: stocks });
 });
+
+// ===================================================================================================
+
+app.get('/nikkei225', async (req, res) => {
+  // console.log(await getNikkei225StockData(Object.values(stockSymbols).flat()));
+  if(loadingFlag)
+    res.json({ "status" : "loading" });
+  else
+    res.json(nikkei225Stocks);
+});
+
+const switchLoadingFlag = async _ => {
+  loadingFlag = false;
+  console.log("nikkei225 stocks data is ready");
+};
+
+const storeNikkei225StocksData = async data => {
+  nikkei225Stocks = data;
+  console.log("data is stored successfully...");
+};
+
+const fetchNikkei225StocksData = async _ => {
+  loadingFlag = true;
+  console.log("fetching data ...");
+  try {
+    const stocks = await getStocksData(Object.values(stockSymbols).flat());
+    await storeNikkei225StocksData(stocks);
+    await switchLoadingFlag();
+  } catch(e) {
+    console.log("error in getting nikkei225 stocks data: ", e);
+  };
+};
+
+const consoleLogMarketTime = async _ => {
+  console.log(nikkei225MarketTime);
+  console.log("stored market time value");
+};
+
+const updateMarketTime = async data => {
+  nikkei225MarketTime = data;
+  console.log("market time is stored successfully ...");
+}; 
+
+const checkAndUpdateMarketTime = async _ => {
+  console.log("checking market time ...");
+  try {
+    const marketTime = await getMarketUpdateTime();
+    await updateMarketTime(marketTime);
+    await fetchNikkei225StocksData();
+  } catch(e) {
+    console.log("error in getting market time: ", e);
+  }
+};
+
+// if(nikkei225Stocks.length === 0){
+//   checkAndUpdateMarketTime();
+//   fetchNikkei225StocksData();
+// } else {
+//   console.log(nikkei225Stocks);
+// }
+
+const startingServer = async _ => {
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentSecond = now.getSeconds();
+  console.log(`${currentHour}:${currentMinute}:${currentSecond}`);
+};
+
+startingServer();
+
+// cron.schedule("5 45 15 * * 1-5", () => {
+//   console.log(new Date().toLocaleString("en-US", { hour12: false}));
+// });
 
 app.listen(PORT, _ => {
   console.log(`App listening at port http://127.0.0.1:${PORT}`);

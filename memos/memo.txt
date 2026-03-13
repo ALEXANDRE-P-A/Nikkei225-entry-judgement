@@ -1,0 +1,2 @@
+変数"nikkei225MarketTime"が空なのかを調べる
+
